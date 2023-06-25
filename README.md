@@ -1,6 +1,6 @@
 # Overview
 
-Simple code for performing text extraction using Google Cloud Vision API.
+Performs OCR-based text extraction using Google Cloud Vision API.
 Supported formats: GIF, JPEG, PDF, PNG, TIFF.
 
 Output generated as JSON file, loadable via json.load.
