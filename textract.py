@@ -14,6 +14,9 @@ from google.cloud import vision
 
 MIMETYPE_PDF = 'application/pdf'
 
+script_name = os.path.basename(__file__)
+logging.basicConfig(level=logging.INFO, format=script_name + ': %(message)s')
+
 def upload_blob(source_file_name, destination_blob_name, gcp_bucket):
     """Uploads a file to the bucket."""
     storage_client = storage.Client()
@@ -34,19 +37,20 @@ def detect_document(gcs_source_uri, mimetype):
 
     annotations = []
 
+    logging.info('Beginning PDF annotation.')
+
     while True:
         next_page = len(annotations) + 1  
 
-        logging.log('Annotating page #', next_page)
         request = vision.AnnotateFileRequest(features=[feature], input_config=input_config, pages=[next_page])
         operation = client.batch_annotate_files(requests=[request])
 
-        annotations.append(operation.responses[0].responses[0].full_text_annotation.text)
+        annotations.append({ 'page' : next_page, 'text' : operation.responses[0].responses[0].full_text_annotation.text })
 
         if len(annotations) == operation.responses[0].total_pages:
             break
 
-    print('Done annotating ', len(annotations), ' pages.')
+    logging.info(f'Done annotating {len(annotations)} pages.')
 
     return annotations
 
@@ -80,7 +84,7 @@ def detect_text(input_file):
     client = vision.ImageAnnotatorClient()
     ocr = client.text_detection(image=image)
 
-    return [ocr.full_text_annotation.text]
+    return [{ 'page' : 1, 'text' : ocr.full_text_annotation.text }]
 
 def main(input_file, output_file, gcp_bucket):
     mimetype = mimetypes.guess_type(input_file)[0]
@@ -91,7 +95,7 @@ def main(input_file, output_file, gcp_bucket):
     # PDF processing goes through a separate process to support multi-page text detection
     if mimetype == MIMETYPE_PDF:
         if not gcp_bucket:
-            logging.error("GCP bucket required for PDF processing. Rerun with --gcp-bucket.")
+            logging.error("GCP bucket required for PDF processing. Use --gcp-bucket.")
             sys.exit(2)
 
         result = detect_text_pdf(input_file, gcp_bucket)
@@ -99,6 +103,8 @@ def main(input_file, output_file, gcp_bucket):
         result = detect_text(input_file)
 
     json.dump(result, open(output_file, 'w'), indent=2)
+
+    logging.info(f'Text extraction done, results are at {output_file}.')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some files.')
